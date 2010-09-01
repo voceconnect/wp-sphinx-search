@@ -6,13 +6,18 @@ Plugin URI: http://vocecommunications.com/
 Description: Adds Sphinx Search Handling to WordPress
 Author: Michael Pretty
 Author URI: http://voceconnect.com/
-*/ 
+*/
+
+if(!class_exists('SphinxClient')) {
+	//sphinx pecl extension insn't installed, use php class
+	require_once(dirname(__FILE__).'/sphinxapi.php');
+}
 
 class WP_Sphinx_Search {
-	
+
 	private $last_error;
 	private $last_warning;
-	
+
 	/**
 	 * Returns the options for sphinx
 	 *
@@ -25,14 +30,14 @@ class WP_Sphinx_Search {
 			'index' => "*",
 			'timeout' => 15
 		);
-		
+
 		$options = get_option('sphinx_options', false);
 		if(!is_array($options)) {
 			$options = array();
 		}
 		return wp_parse_args($options, $defaults);
 	}
-	
+
 	/**
 	 * Updates the options with the given options array
 	 *
@@ -41,7 +46,7 @@ class WP_Sphinx_Search {
 	private function update_options($options = array()) {
 		update_option('sphinx_options', $options);
 	}
-	
+
 	/**
 	 * Initialization function, registers needed hooks.
 	 * Runs on 'init'
@@ -53,9 +58,10 @@ class WP_Sphinx_Search {
 		if(class_exists('SphinxClient')) {
 			add_action('parse_query', array($this, 'parse_query'), 10, 1);
 			add_filter('found_posts', array($this, 'search_filter_found_posts'), 10, 2);
+			add_filter('the_posts', array($this, 'search_filter_posts_order'), 10, 2);
 		}
 	}
-	
+
 	/**
 	 * Checks query to see if it is a search, and if so, kicks off the
 	 * Sphinx search
@@ -65,16 +71,16 @@ class WP_Sphinx_Search {
 	public function parse_query(&$wp_query) {
 		if($wp_query->is_search) {
 			if(class_exists('SphinxClient')) {
-				switch($wp_query->query_vars['sort']) {
-					case 'date': 
+				switch($wp_query->get('sort')) {
+					case 'date':
 						$wp_query->query_vars['orderby'] = 'date';
 						$wp_query->query_vars['order'] = 'DESC';
 						break;
-					case 'title': 
+					case 'title':
 						$wp_query->query_vars['orderby'] = 'title';
 						$wp_query->query_vars['order'] = 'ASC';
 						break;
-					default: 
+					default:
 						$wp_query->query_vars['sort'] = 'match'; //setting this so sort link will be hilighted
 				}
 				$results = $this->search_posts($wp_query->query_vars);
@@ -98,10 +104,10 @@ class WP_Sphinx_Search {
 					$wp_query->query_vars['post__in'] = $matching_ids;
 					$wp_query->query_vars['sphinx_num_matches'] = intval($results['total']);
 				}
-			} 
+			}
 		}
 	}
-	
+
 	/**
 	 * Runs a search against sphinx
 	 *
@@ -120,7 +126,7 @@ class WP_Sphinx_Search {
 		$args = wp_parse_args($args, $defaults);
 		$sphinx = new SphinxClient();
 		$sphinx->setServer($options['server'], $options['port']);
-	
+
 		$search = $args['s'];
 		switch($args['search_using']) {
 			case 'all':
@@ -132,24 +138,24 @@ class WP_Sphinx_Search {
 			default:
 				$sphinx->setMatchMode(SPH_MATCH_ANY);
 		}
-	
+
 		switch($args['sort']) {
-			case 'date': 
+			case 'date':
 				$sphinx->setSortMode(SPH_SORT_ATTR_DESC, 'date_added');
 				break;
-			case 'title': 
+			case 'title':
 				$sphinx->setSortMode(SPH_SORT_ATTR_ASC, 'title');
 				break;
-			default: 
+			default:
 				$sphinx->setSortMode(SPH_SORT_RELEVANCE);
 		}
-		
+
 		$page = isset($args['paged']) && (intval($args['paged']) > 0) ? intval($args['paged']) : 1;
 		$per_page = max(array($args['posts_per_page'], $args['showposts']));
 		if($per_page < 1) {
 			$per_page = get_option('posts_per_page');
 		}
-		
+
 		$sphinx->setLimits(($page - 1) * $per_page, $per_page);
 		$sphinx->setMaxQueryTime(intval($options['timeout']));
 		$result = $sphinx->query($search, $options['index']);
@@ -157,7 +163,7 @@ class WP_Sphinx_Search {
 		$this->last_warning = $sphinx->getLastWarning();
 		return $result;
 	}
-	
+
 	private function test_settings() {
 		$result = $this->search_posts(array('s'=>'test search', 'posts_per_page' => 1));
 		if(!$result) {
@@ -165,9 +171,9 @@ class WP_Sphinx_Search {
 		}
 		return false;
 	}
-	
+
 	/**
-	 * Filters the found posts to reflect the number returned by sphinx
+	 * Filters the found posts to reflect the number and order returned by sphinx
 	 *
 	 * @param int $found_posts
 	 * @param WP_Query $wp_query
@@ -184,10 +190,27 @@ class WP_Sphinx_Search {
 				$wp_query->query_vars['paged'] = $wp_query->query_vars['sphinx_paged'];
 			}
 		}
-		
+
 		return $found_posts;
 	}
-	
+
+	public function search_filter_posts_order($posts, $wp_query = null) {
+		if( !is_null($wp_query) && isset($wp_query->query_vars['post__in']) && isset($wp_query->query_vars['sphinx_num_matches']) ) {
+			$sphinx_id_order = $wp_query->query_vars['post__in'];
+			$reordered_posts = array();
+			foreach ($sphinx_id_order as $sphinx_post_id) {
+				foreach ($posts as $post) {
+					if ($post->ID == $sphinx_post_id) {
+						$reordered_posts[] = $post;
+						break;
+					}
+				}
+			}
+			return $reordered_posts;
+		}
+		return $posts;
+	}
+
 	/**
 	 * Adds options page to manage sphinx settings
 	 *
@@ -195,7 +218,7 @@ class WP_Sphinx_Search {
 	public function admin_add_menu_items() {
 		add_options_page(__('Sphinx Search', 'sphinx-search'), __('Sphinx Search', 'sphinx-search'), 'manage_options', 'sphinx-search', array($this, 'admin_options_page'));
 	}
-		
+
 	public function admin_options_page() {
 		$options = $this->get_options();
 		$error = false;
@@ -270,16 +293,16 @@ class WP_Sphinx_Search {
 					<?php wp_nonce_field('save_sphinx_options', 'sphinx_nonce');?>
 					<input type="submit" name="submit" value="<?php _e('Save Changes', 'sphinx-search') ?>" />
 				</p>
-			</form>		
+			</form>
 		</div>
 		<?php
 	}
-	
-	public function uninstall() { 
+
+	public function uninstall() {
 		if(defined('WP_UNINSTALL_PLUGIN') && WP_UNINSTALL_PLUGIN) {
 			delete_option('sphinx_options');
 		}
 	}
-	
+
 }
 add_action('init', array(new WP_Sphinx_Search(), 'initialize'));
