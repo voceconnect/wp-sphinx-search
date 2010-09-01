@@ -24,5 +24,8 @@ Sphinx is a GPL version 2 full-text search engine with the ability to run high s
 1.  Options page.
 
 == Changelog ==
+= 0.2.0 =
+* added sorting to post query results to match order returned by sphinx
+* added fallback sphinxapi.php to handle case where sphinx pecl extension isn't installed
 = 0.1.0 =
 * Initial Release

@@ -1,7 +1,7 @@
 <?php
 /*
 Plugin Name: WP Sphinx Search
-Version: 1.0
+Version: 0.2.0
 Plugin URI: http://vocecommunications.com/
 Description: Adds Sphinx Search Handling to WordPress
 Author: Michael Pretty
