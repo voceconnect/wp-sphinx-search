@@ -54,7 +54,7 @@ class WP_Sphinx_Search {
 	 */
 	public function initialize() {
 		add_action('admin_menu', array($this, 'admin_add_menu_items'));
-		register_uninstall_hook(__FILE__, array($this, 'uninstall'));
+		register_uninstall_hook(__FILE__, array(__CLASS__, 'uninstall'));
 		if(class_exists('SphinxClient')) {
 			add_action('parse_query', array($this, 'parse_query'), 10, 1);
 			add_filter('found_posts', array($this, 'search_filter_found_posts'), 10, 2);
@@ -298,7 +298,7 @@ class WP_Sphinx_Search {
 		<?php
 	}
 
-	public function uninstall() {
+	public static function uninstall() {
 		if(defined('WP_UNINSTALL_PLUGIN') && WP_UNINSTALL_PLUGIN) {
 			delete_option('sphinx_options');
 		}
