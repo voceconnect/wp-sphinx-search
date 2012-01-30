@@ -67,7 +67,7 @@ class WP_Sphinx_Search {
 	 *
 	 * @param WP_Query $wp_query
 	 */
-	public function parse_query(&$wp_query) {
+	public function parse_query($wp_query) {
 		if($wp_query->is_search) {
 			if(class_exists('SphinxClient')) {
 				switch($wp_query->get('sort')) {
@@ -177,7 +177,7 @@ class WP_Sphinx_Search {
 	 * @param int $found_posts
 	 * @param WP_Query $wp_query
 	 */
-	public function search_filter_found_posts($found_posts, &$wp_query = null) {
+	public function search_filter_found_posts($found_posts, $wp_query = null) {
 		if(!is_null($wp_query)) {
 			if(isset($wp_query->query_vars['sphinx_num_matches'])) {
 				$found_posts = intval($wp_query->query_vars['sphinx_num_matches']);
